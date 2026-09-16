@@ -1,3 +1,6 @@
+import truststore
+truststore.inject_into_ssl()
+
 import warnings
 warnings.filterwarnings("ignore", message="resource_tracker: There appear to be.*")
 
