@@ -13,4 +13,5 @@ dependencies = [
     "python-multipart==0.0.20",
     "python-dotenv==1.1.1",
     "truststore>=0.10.4",
+    "litellm>=1.101.0",
 ]
