@@ -8,6 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Zscaler SSL interception** breaks Python's default certificate verification. `truststore` is already listed as a dependency and activated at the top of `backend/app.py` (`truststore.inject_into_ssl()`). Any new script that makes HTTPS calls must also call this before importing `requests`, `httpx`, or `huggingface_hub`.
 - **Do not use `--reload`** with uvicorn. It spawns a multiprocessing child that can leave orphaned processes holding the port after the parent dies.
 - Python 3.13 is in `.venv/` (managed by uv). The system Python is 3.10.11 — do not use it for this project.
+- **Frontend cache busting**: `index.html` references `style.css` and `script.js` with a `?v=N` query string. Increment N whenever frontend files are modified, otherwise browsers serve stale cached versions (304 Not Modified).
 
 ## Package and script execution
 
