@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     courseTitles = document.getElementById('courseTitles');
     
     setupEventListeners();
+    document.getElementById('newChatBtn').addEventListener('click', createNewSession);
     createNewSession();
     loadCourseStats();
 });
@@ -122,10 +123,17 @@ function addMessage(content, type, sources = null, isWelcome = false) {
     let html = `<div class="message-content">${displayContent}</div>`;
     
     if (sources && sources.length > 0) {
+        const sourceHtml = sources.map(s => {
+            const label = escapeHtml(typeof s === 'string' ? s : (s.label || String(s)));
+            if (s && typeof s === 'object' && s.url) {
+                return `<a class="source-link" href="${s.url}" target="_blank" rel="noopener noreferrer">&#9654; ${label}</a>`;
+            }
+            return `<span class="source-link source-link--no-url">${label}</span>`;
+        }).join('');
         html += `
             <details class="sources-collapsible">
                 <summary class="sources-header">Sources</summary>
-                <div class="sources-content">${sources.join(', ')}</div>
+                <div class="sources-content sources-links">${sourceHtml}</div>
             </details>
         `;
     }
