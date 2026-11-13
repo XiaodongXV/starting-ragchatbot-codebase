@@ -40,7 +40,7 @@ All responses must be:
 Provide only the direct answer to what was asked.
 """
 
-    def __init__(self, api_key: str, model: str):
+    def __init__(self, api_key: str, model: str, fallback_models: Optional[List[str]] = None):
         self.model = model
 
         # LiteLLM reads credentials from the environment, keyed by provider.
@@ -55,6 +55,10 @@ Provide only the direct answer to what was asked.
             "temperature": 0,
             "max_tokens": 800
         }
+        # LiteLLM tries these in order if the primary model raises
+        # (quota exhaustion, overload, ...). Applies to both calls below.
+        if fallback_models:
+            self.base_params["fallbacks"] = list(fallback_models)
 
     @staticmethod
     def _to_openai_tools(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

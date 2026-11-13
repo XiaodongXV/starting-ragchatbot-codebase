@@ -26,6 +26,13 @@ def _model() -> str:
     return os.getenv("LLM_MODEL", "").strip() or PROVIDERS[_provider()][0]
 
 
+def _fallback_models() -> list:
+    # Comma-separated LiteLLM model names tried in order when the primary
+    # model fails (e.g. a free-tier 429 quota error or a 503 overload)
+    raw = os.getenv("LLM_FALLBACK_MODELS", "")
+    return [m.strip() for m in raw.split(",") if m.strip()]
+
+
 def _api_key() -> str:
     return os.getenv(PROVIDERS[_provider()][1], "")
 
@@ -36,6 +43,7 @@ class Config:
     # LLM settings — provider is selected at startup via LLM_PROVIDER
     LLM_PROVIDER: str = field(default_factory=_provider)
     LLM_MODEL: str = field(default_factory=_model)
+    LLM_FALLBACK_MODELS: list = field(default_factory=_fallback_models)
     LLM_API_KEY: str = field(default_factory=_api_key)
 
     # Embedding model settings
