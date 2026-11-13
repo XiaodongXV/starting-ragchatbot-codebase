@@ -88,7 +88,8 @@ class CourseSearchTool(Tool):
     def _format_results(self, results: SearchResults) -> str:
         """Format search results with course and lesson context"""
         formatted = []
-        sources = []  # Track sources for the UI
+        sources = []  # Track sources for the UI, one per (course, lesson)
+        seen = set()
 
         for doc, meta in zip(results.documents, results.metadata):
             course_title = meta.get('course_title', 'unknown')
@@ -99,17 +100,18 @@ class CourseSearchTool(Tool):
             if lesson_num is not None:
                 header += f" - Lesson {lesson_num}"
             header += "]"
+            formatted.append(f"{header}\n{doc}")
 
-            # Track source for the UI (with lesson link if available)
-            label = course_title
-            if lesson_num is not None:
-                label += f" - Lesson {lesson_num}"
+            # Track source for the UI (with lesson link if available);
+            # several chunks of the same lesson collapse into one source
+            key = (course_title, lesson_num)
+            if key in seen:
+                continue
+            seen.add(key)
             url = None
             if lesson_num is not None:
                 url = self.store.get_lesson_link(course_title, lesson_num)
-            sources.append({"label": label, "url": url})
-
-            formatted.append(f"{header}\n{doc}")
+            sources.append({"label": header[1:-1], "url": url})
 
         # Store sources for retrieval
         self.last_sources = sources
@@ -121,6 +123,7 @@ class CourseOutlineTool(Tool):
 
     def __init__(self, vector_store: VectorStore):
         self.store = vector_store
+        self.last_sources = []  # Course + lesson links from the last outline
 
     def get_tool_definition(self) -> Dict[str, Any]:
         return {
@@ -144,6 +147,7 @@ class CourseOutlineTool(Tool):
 
     def execute(self, course_name: str) -> str:
         import json
+        self.last_sources = []
         canonical = self.store._resolve_course_name(course_name)
         if not canonical:
             return f"Course '{course_name}' not found."
@@ -166,9 +170,13 @@ class CourseOutlineTool(Tool):
         if course_link:
             lines.append(f"Link: {course_link}")
         lines.append(f"Lessons ({len(lessons)}):")
+        sources = [{"label": title, "url": course_link or None}]
         for lesson in sorted(lessons, key=lambda l: l.get('lesson_number', 0)):
-            lines.append(f"  Lesson {lesson.get('lesson_number')}: {lesson.get('lesson_title', '')}")
+            label = f"Lesson {lesson.get('lesson_number')}: {lesson.get('lesson_title', '')}"
+            lines.append(f"  {label}")
+            sources.append({"label": label, "url": lesson.get('lesson_link') or None})
 
+        self.last_sources = sources
         return "\n".join(lines)
 
 

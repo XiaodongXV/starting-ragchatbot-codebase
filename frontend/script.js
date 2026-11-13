@@ -125,8 +125,8 @@ function addMessage(content, type, sources = null, isWelcome = false) {
     if (sources && sources.length > 0) {
         const sourceHtml = sources.map(s => {
             const label = escapeHtml(typeof s === 'string' ? s : (s.label || String(s)));
-            if (s && typeof s === 'object' && s.url) {
-                return `<a class="source-link" href="${s.url}" target="_blank" rel="noopener noreferrer">&#9654; ${label}</a>`;
+            if (s && typeof s === 'object' && typeof s.url === 'string' && /^https?:\/\//i.test(s.url)) {
+                return `<a class="source-link" href="${escapeHtml(s.url).replace(/"/g, '&quot;')}" target="_blank" rel="noopener noreferrer">&#9654; ${label}</a>`;
             }
             return `<span class="source-link source-link--no-url">${label}</span>`;
         }).join('');
