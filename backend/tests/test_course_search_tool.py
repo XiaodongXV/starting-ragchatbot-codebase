@@ -23,18 +23,27 @@ class TestToolDefinition:
         assert d["input_schema"]["type"] == "object"
         assert d["input_schema"]["required"] == ["query"]
         props = d["input_schema"]["properties"]
-        assert set(props) == {"query", "course_name", "lesson_number"}
+        assert set(props) == {"query", "course_name", "lesson_number", "exclude_course"}
         assert props["lesson_number"]["type"] == "integer"
+
+    def test_model_is_told_how_to_search_across_courses(self, mock_store):
+        """The model only learns about these options from the schema text it is sent."""
+        props = CourseSearchTool(mock_store).get_tool_definition()["input_schema"]["properties"]
+        assert "Omit" in props["course_name"]["description"]
+        assert "OTHER courses" in props["exclude_course"]["description"]
 
 
 class TestExecuteRouting:
     def test_forwards_all_arguments_to_store(self, mock_store):
-        CourseSearchTool(mock_store).execute("what is MCP", course_name="MCP", lesson_number=2)
-        mock_store.search.assert_called_once_with(query="what is MCP", course_name="MCP", lesson_number=2)
+        CourseSearchTool(mock_store).execute("what is MCP", course_name="MCP", lesson_number=2,
+                                             exclude_course="Other")
+        mock_store.search.assert_called_once_with(query="what is MCP", course_name="MCP", lesson_number=2,
+                                                  exclude_course="Other")
 
     def test_optional_arguments_default_to_none(self, mock_store):
         CourseSearchTool(mock_store).execute("what is MCP")
-        mock_store.search.assert_called_once_with(query="what is MCP", course_name=None, lesson_number=None)
+        mock_store.search.assert_called_once_with(query="what is MCP", course_name=None, lesson_number=None,
+                                                  exclude_course=None)
 
     def test_store_error_is_returned_verbatim(self, mock_store):
         mock_store.search.return_value = SearchResults.empty("Search error: boom")
@@ -56,6 +65,10 @@ class TestEmptyResults:
     def test_message_mentions_course_and_lesson(self, mock_store):
         out = CourseSearchTool(mock_store).execute("x", course_name="MCP", lesson_number=3)
         assert out == "No relevant content found in course 'MCP' in lesson 3."
+
+    def test_message_mentions_excluded_course(self, mock_store):
+        out = CourseSearchTool(mock_store).execute("x", exclude_course="MCP")
+        assert out == "No relevant content found outside course 'MCP'."
 
     def test_message_mentions_lesson_zero(self, mock_store):
         """Lesson 0 is a real lesson in the docs ('Lesson 0: Introduction'); `if lesson_number:` drops it."""

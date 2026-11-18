@@ -31,11 +31,26 @@ class SearchResults:
         """Check if results are empty"""
         return len(self.documents) == 0
 
+    def within(self, max_distance: float) -> 'SearchResults':
+        """Keep only the chunks at most `max_distance` away from the query (best match first)"""
+        keep = [i for i, d in enumerate(self.distances) if d <= max_distance]
+        return SearchResults(
+            documents=[self.documents[i] for i in keep],
+            metadata=[self.metadata[i] for i in keep],
+            distances=[self.distances[i] for i in keep],
+            error=self.error,
+        )
+
 class VectorStore:
     """Vector storage using ChromaDB for course content and metadata"""
-    
-    def __init__(self, chroma_path: str, embedding_model: str, max_results: int = 5):
+
+    def __init__(self, chroma_path: str, embedding_model: str, max_results: int = 5,
+                 max_distance: Optional[float] = None):
         self.max_results = max_results
+        # Open-ended searches (no course/lesson named) drop chunks farther than this from the
+        # query, so "nothing relevant" can be reported instead of padding with the 5 least-bad
+        # chunks. None disables the cut-off. Calibrated on the real index in config.py.
+        self.max_distance = max_distance
         # Initialize ChromaDB client
         self.client = chromadb.PersistentClient(
             path=chroma_path,
@@ -62,28 +77,36 @@ class VectorStore:
                query: str,
                course_name: Optional[str] = None,
                lesson_number: Optional[int] = None,
-               limit: Optional[int] = None) -> SearchResults:
+               limit: Optional[int] = None,
+               exclude_course: Optional[str] = None) -> SearchResults:
         """
         Main search interface that handles course resolution and content search.
-        
+
         Args:
             query: What to search for in course content
             course_name: Optional course name/title to filter by
             lesson_number: Optional lesson number to filter by
             limit: Maximum results to return
-            
+            exclude_course: Optional course name/title to leave out of the results
+
         Returns:
             SearchResults object with documents and metadata
         """
-        # Step 1: Resolve course name if provided
+        # Step 1: Resolve course names if provided
         course_title = None
         if course_name:
             course_title = self._resolve_course_name(course_name)
             if not course_title:
                 return SearchResults.empty(f"No course found matching '{course_name}'")
-        
+
+        excluded_title = None
+        if exclude_course:
+            excluded_title = self._resolve_course_name(exclude_course)
+            if not excluded_title:
+                return SearchResults.empty(f"No course found matching '{exclude_course}'")
+
         # Step 2: Build filter for content search
-        filter_dict = self._build_filter(course_title, lesson_number)
+        filter_dict = self._build_filter(course_title, lesson_number, excluded_title)
         
         # Step 3: Search course content
         # Use provided limit or fall back to configured max_results
@@ -95,7 +118,12 @@ class VectorStore:
                 n_results=search_limit,
                 where=filter_dict
             )
-            return SearchResults.from_chroma(results)
+            found = SearchResults.from_chroma(results)
+            # The user named a course or lesson -> return the best of what is there, however
+            # distant. Only an open-ended search can be "about nothing we have".
+            if self.max_distance is not None and not course_title and lesson_number is None:
+                found = found.within(self.max_distance)
+            return found
         except Exception as e:
             return SearchResults.empty(f"Search error: {str(e)}")
     
@@ -128,22 +156,21 @@ class VectorStore:
         
         return None
     
-    def _build_filter(self, course_title: Optional[str], lesson_number: Optional[int]) -> Optional[Dict]:
+    def _build_filter(self, course_title: Optional[str], lesson_number: Optional[int],
+                      excluded_title: Optional[str] = None) -> Optional[Dict]:
         """Build ChromaDB filter from search parameters"""
-        if not course_title and lesson_number is None:
-            return None
-            
-        # Handle different filter combinations
-        if course_title and lesson_number is not None:
-            return {"$and": [
-                {"course_title": course_title},
-                {"lesson_number": lesson_number}
-            ]}
-        
+        clauses = []
         if course_title:
-            return {"course_title": course_title}
-            
-        return {"lesson_number": lesson_number}
+            clauses.append({"course_title": course_title})
+        if lesson_number is not None:  # lesson 0 is a real lesson
+            clauses.append({"lesson_number": lesson_number})
+        if excluded_title:
+            clauses.append({"course_title": {"$ne": excluded_title}})
+
+        if not clauses:
+            return None
+        # Chroma rejects an $and with a single clause
+        return clauses[0] if len(clauses) == 1 else {"$and": clauses}
     
     def add_course_metadata(self, course: Course):
         """Add course information to the catalog for semantic search"""

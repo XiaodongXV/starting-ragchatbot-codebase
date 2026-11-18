@@ -53,6 +53,10 @@ class Config:
     CHUNK_SIZE: int = 800       # Size of text chunks for vector storage
     CHUNK_OVERLAP: int = 100     # Characters to overlap between chunks
     MAX_RESULTS: int = 5         # Maximum search results to return
+    # Open-ended searches drop chunks farther than this (L2, all-MiniLM-L6-v2) from the query.
+    # Measured on the real index: on-topic chunks sit at 0.5-1.1, loosely related ones (e.g. "tool
+    # use" for an MCP question) at ~0.9-1.15, off-topic ones at 1.24+ ("Italian pasta" = 1.62).
+    MAX_RESULT_DISTANCE: float = 1.2
     MAX_HISTORY: int = 2         # Number of conversation messages to remember
 
     # Database paths

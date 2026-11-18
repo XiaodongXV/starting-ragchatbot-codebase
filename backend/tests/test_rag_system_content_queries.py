@@ -29,7 +29,7 @@ def make_rag(monkeypatch, tmp_store):
         monkeypatch.setattr(ai_generator.litellm, "completion", llm)
         cfg = SimpleNamespace(
             CHUNK_SIZE=800, CHUNK_OVERLAP=100, CHROMA_PATH="unused", EMBEDDING_MODEL="unused",
-            MAX_RESULTS=5, LLM_API_KEY="", LLM_MODEL="gemini/test-model",
+            MAX_RESULTS=5, MAX_RESULT_DISTANCE=1.2, LLM_API_KEY="", LLM_MODEL="gemini/test-model",
             LLM_FALLBACK_MODELS=["gemini/fallback"], MAX_HISTORY=max_history)
         return RAGSystem(cfg), llm
     return _make

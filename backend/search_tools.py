@@ -3,6 +3,13 @@ from abc import ABC, abstractmethod
 from vector_store import VectorStore, SearchResults
 
 
+class ToolError(str):
+    """Text describing a tool that could not run (unknown tool, bad arguments, exception).
+
+    It is still a plain str, so it is fed back to the model like any other result; callers that
+    care can tell a failed call from a normal (even empty) result with isinstance()."""
+
+
 class Tool(ABC):
     """Abstract base class for all tools"""
     
@@ -28,36 +35,53 @@ class CourseSearchTool(Tool):
         """Return Anthropic tool definition for this tool"""
         return {
             "name": "search_course_content",
-            "description": "Search course materials with smart course name matching and lesson filtering",
+            "description": (
+                "Search course materials with smart course name matching and lesson filtering. "
+                "Without course_name/lesson_number it searches ALL courses and returns only "
+                "passages that are actually relevant (possibly none)."
+            ),
             "input_schema": {
                 "type": "object",
                 "properties": {
                     "query": {
-                        "type": "string", 
+                        "type": "string",
                         "description": "What to search for in the course content"
                     },
                     "course_name": {
                         "type": "string",
-                        "description": "Course title (partial matches work, e.g. 'MCP', 'Introduction')"
+                        "description": (
+                            "Restrict the search to this course (partial matches work, e.g. 'MCP', "
+                            "'Introduction'). Omit it to search every course, e.g. when looking for "
+                            "which course covers a topic."
+                        )
                     },
                     "lesson_number": {
                         "type": "integer",
                         "description": "Specific lesson number to search within (e.g. 1, 2, 3)"
+                    },
+                    "exclude_course": {
+                        "type": "string",
+                        "description": (
+                            "Leave this course out of the results (partial matches work). Use it to "
+                            "find OTHER courses on a topic that came from a known course."
+                        )
                     }
                 },
                 "required": ["query"]
             }
         }
-    
-    def execute(self, query: str, course_name: Optional[str] = None, lesson_number: Optional[int] = None) -> str:
+
+    def execute(self, query: str, course_name: Optional[str] = None, lesson_number: Optional[int] = None,
+                exclude_course: Optional[str] = None) -> str:
         """
         Execute the search tool with given parameters.
-        
+
         Args:
             query: What to search for
             course_name: Optional course filter
             lesson_number: Optional lesson filter
-            
+            exclude_course: Optional course to leave out of the results
+
         Returns:
             Formatted search results or error message
         """
@@ -69,7 +93,8 @@ class CourseSearchTool(Tool):
         results = self.store.search(
             query=query,
             course_name=course_name,
-            lesson_number=lesson_number
+            lesson_number=lesson_number,
+            exclude_course=exclude_course
         )
         
         # Handle errors
@@ -83,6 +108,8 @@ class CourseSearchTool(Tool):
                 filter_info += f" in course '{course_name}'"
             if lesson_number is not None:  # lesson 0 is a real lesson, so don't test truthiness
                 filter_info += f" in lesson {lesson_number}"
+            if exclude_course:
+                filter_info += f" outside course '{exclude_course}'"
             return f"No relevant content found{filter_info}."
         
         # Format and return results
@@ -205,16 +232,16 @@ class ToolManager:
     def execute_tool(self, tool_name: str, **kwargs) -> str:
         """Execute a tool by name with given parameters"""
         if tool_name not in self.tools:
-            return f"Tool '{tool_name}' not found"
+            return ToolError(f"Tool '{tool_name}' not found")
 
-        # Whatever goes wrong is returned as text so the model can read it and recover,
-        # instead of surfacing as HTTP 500 ("Query failed").
+        # Whatever goes wrong is returned as text (a ToolError) so the model can read it and
+        # recover, instead of surfacing as HTTP 500 ("Query failed").
         try:
             return self.tools[tool_name].execute(**kwargs)
         except TypeError as e:  # arguments that don't match the tool's signature
-            return f"Invalid arguments for tool '{tool_name}': {e}"
+            return ToolError(f"Invalid arguments for tool '{tool_name}': {e}")
         except Exception as e:
-            return f"Tool '{tool_name}' failed: {e}"
+            return ToolError(f"Tool '{tool_name}' failed: {e}")
     
     def get_last_sources(self) -> list:
         """Get sources from the last search operation"""

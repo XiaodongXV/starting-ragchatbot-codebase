@@ -15,7 +15,8 @@ class RAGSystem:
         
         # Initialize core components
         self.document_processor = DocumentProcessor(config.CHUNK_SIZE, config.CHUNK_OVERLAP)
-        self.vector_store = VectorStore(config.CHROMA_PATH, config.EMBEDDING_MODEL, config.MAX_RESULTS)
+        self.vector_store = VectorStore(config.CHROMA_PATH, config.EMBEDDING_MODEL, config.MAX_RESULTS,
+                                        config.MAX_RESULT_DISTANCE)
         self.ai_generator = AIGenerator(config.LLM_API_KEY, config.LLM_MODEL, config.LLM_FALLBACK_MODELS)
         self.session_manager = SessionManager(config.MAX_HISTORY)
         
