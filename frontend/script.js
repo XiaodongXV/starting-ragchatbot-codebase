@@ -132,7 +132,7 @@ function addMessage(content, type, sources = null, isWelcome = false) {
         }).join('');
         html += `
             <details class="sources-collapsible">
-                <summary class="sources-header">Sources</summary>
+                <summary class="sources-header" title="Passages found by the search. The answer may not use all of them.">Retrieved passages</summary>
                 <div class="sources-content sources-links">${sourceHtml}</div>
             </details>
         `;
