@@ -61,7 +61,10 @@ class CourseSearchTool(Tool):
         Returns:
             Formatted search results or error message
         """
-        
+
+        # Never leave the previous search's sources behind (e.g. after an error or an empty result)
+        self.last_sources = []
+
         # Use the vector store's unified search interface
         results = self.store.search(
             query=query,
@@ -78,7 +81,7 @@ class CourseSearchTool(Tool):
             filter_info = ""
             if course_name:
                 filter_info += f" in course '{course_name}'"
-            if lesson_number:
+            if lesson_number is not None:  # lesson 0 is a real lesson, so don't test truthiness
                 filter_info += f" in lesson {lesson_number}"
             return f"No relevant content found{filter_info}."
         
@@ -203,8 +206,15 @@ class ToolManager:
         """Execute a tool by name with given parameters"""
         if tool_name not in self.tools:
             return f"Tool '{tool_name}' not found"
-        
-        return self.tools[tool_name].execute(**kwargs)
+
+        # Whatever goes wrong is returned as text so the model can read it and recover,
+        # instead of surfacing as HTTP 500 ("Query failed").
+        try:
+            return self.tools[tool_name].execute(**kwargs)
+        except TypeError as e:  # arguments that don't match the tool's signature
+            return f"Invalid arguments for tool '{tool_name}': {e}"
+        except Exception as e:
+            return f"Tool '{tool_name}' failed: {e}"
     
     def get_last_sources(self) -> list:
         """Get sources from the last search operation"""

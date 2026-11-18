@@ -122,7 +122,31 @@ Provide only the direct answer to what was asked.
             return self._handle_tool_execution(message, api_params, tool_manager)
 
         # Return direct response
-        return message.content
+        return self._answer_text(message.content)
+
+    # Shown when the model returns no text (e.g. reasoning used up max_tokens). The API response
+    # model requires a str, so None would otherwise turn into HTTP 500.
+    EMPTY_ANSWER = "Sorry, I couldn't generate an answer this time. Please try again."
+
+    @classmethod
+    def _answer_text(cls, content: Optional[str]) -> str:
+        return content if content and content.strip() else cls.EMPTY_ANSWER
+
+    @staticmethod
+    def _run_tool(tool_manager, tool_call) -> str:
+        """Execute one model-requested tool call. Any problem is returned as text for the model
+        to read (and recover from) instead of raising."""
+        name = tool_call.function.name
+        try:
+            args = json.loads(tool_call.function.arguments or "{}")
+        except (json.JSONDecodeError, TypeError) as e:
+            return f"Error: arguments for tool '{name}' are not valid JSON ({e})"
+        if not isinstance(args, dict):
+            return f"Error: arguments for tool '{name}' must be a JSON object"
+        try:
+            return tool_manager.execute_tool(name, **args)
+        except Exception as e:
+            return f"Error: tool '{name}' failed: {e}"
 
     def _handle_tool_execution(self, initial_message, base_params: Dict[str, Any], tool_manager):
         """
@@ -142,19 +166,18 @@ Provide only the direct answer to what was asked.
 
         # Execute each tool call and append its result as its own message
         for tool_call in initial_message.tool_calls:
-            tool_result = tool_manager.execute_tool(
-                tool_call.function.name,
-                **json.loads(tool_call.function.arguments)
-            )
+            tool_result = self._run_tool(tool_manager, tool_call)
             messages.append({
                 "role": "tool",
                 "tool_call_id": tool_call.id,
                 "content": tool_result,
             })
 
-        # Get final response without tools
-        final_response = litellm.completion(**{
-            **self.base_params,
-            "messages": messages,
-        })
-        return final_response.choices[0].message.content
+        # Final answer. The history now contains tool_calls/tool messages, which stricter providers
+        # only accept when tools are declared, so declare them but forbid further calls.
+        follow_up = {**self.base_params, "messages": messages}
+        if base_params.get("tools"):
+            follow_up["tools"] = base_params["tools"]
+            follow_up["tool_choice"] = "none"
+        final_response = litellm.completion(**follow_up)
+        return self._answer_text(final_response.choices[0].message.content)

@@ -10,10 +10,13 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel
 from typing import Any, List, Optional
+import logging
 import os
 
 from config import config
 from rag_system import RAGSystem
+
+logger = logging.getLogger("uvicorn.error")
 
 # Initialize FastAPI app
 app = FastAPI(title="Course Materials RAG System", root_path="")
@@ -74,6 +77,8 @@ async def query_documents(request: QueryRequest):
             session_id=session_id
         )
     except Exception as e:
+        # The frontend only shows "Query failed"; the real cause must be in the server log.
+        logger.exception("POST /api/query failed (query=%r)", request.query)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/courses", response_model=CourseStats)

@@ -99,17 +99,30 @@ class VectorStore:
         except Exception as e:
             return SearchResults.empty(f"Search error: {str(e)}")
     
+    # Nearest-course distances measured on the real catalog (L2, all-MiniLM-L6-v2): real partial
+    # names such as "Computer Use" = 0.81, but a short acronym like "MCP" = 1.55 while nonsense
+    # such as "Italian Pasta Cooking Masterclass" = 1.63. Distance alone cannot separate them, so a
+    # literal title match is tried first and the distance only guards the semantic fallback.
+    MAX_COURSE_NAME_DISTANCE = 1.0
+
     def _resolve_course_name(self, course_name: str) -> Optional[str]:
-        """Use vector search to find best matching course by name"""
+        """Resolve a (possibly partial) course name to a canonical title, or None if nothing fits"""
         try:
+            needle = course_name.strip().lower()
+            if needle:
+                literal = [t for t in self.get_existing_course_titles() if needle in t.lower()]
+                if len(literal) == 1:
+                    return literal[0]
+
             results = self.course_catalog.query(
                 query_texts=[course_name],
                 n_results=1
             )
-            
+
             if results['documents'][0] and results['metadatas'][0]:
-                # Return the title (which is now the ID)
-                return results['metadatas'][0][0]['title']
+                if results['distances'][0][0] <= self.MAX_COURSE_NAME_DISTANCE:
+                    # Return the title (which is now the ID)
+                    return results['metadatas'][0][0]['title']
         except Exception as e:
             print(f"Error resolving course name: {e}")
         

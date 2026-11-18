@@ -15,3 +15,16 @@ dependencies = [
     "truststore>=0.10.4",
     "litellm>=1.101.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+pythonpath = ["backend"]
+markers = [
+    "live: hits the real LLM provider / real chroma_db (opt-in with -m live)",
+]
+addopts = "-m 'not live'"
