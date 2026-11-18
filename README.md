@@ -47,10 +47,10 @@ chmod +x run.sh
 
 ```bash
 cd backend
-uv run uvicorn app:app --reload --port 8000
+uv run python serve.py            # auto-reload, port 8080 (--port N, --no-reload)
 ```
 
 The application will be available at:
-- Web Interface: `http://localhost:8000`
-- API Documentation: `http://localhost:8000/docs`
+- Web Interface: `http://localhost:8080`
+- API Documentation: `http://localhost:8080/docs`
 
